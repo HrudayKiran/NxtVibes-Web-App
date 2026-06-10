@@ -769,7 +769,7 @@ export default function MessagesPage() {
                                   height="100%"
                                   frameBorder="0"
                                   style={{ border: 0 }}
-                                  src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyBURfArYP_txIxAGEPYhNKm-FCtY4gQ7oQ"}&q=${msg.media_url}`}
+                                  src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}&q=${msg.media_url}`}
                                   allowFullScreen
                                 ></iframe>
                               ) : (
