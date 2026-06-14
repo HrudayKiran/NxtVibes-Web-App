@@ -367,14 +367,14 @@ export default function Home() {
       <section id="waitlist" className="relative pt-32 md:pt-44 pb-20 px-5 bg-[radial-gradient(circle_at_20%_25%,rgba(157,116,247,0.03),transparent_50%),radial-gradient(circle_at_80%_55%,rgba(236,72,153,0.03),transparent_50%)]">
 
         <div className="max-w-4xl mx-auto flex flex-col items-center text-center">
-          <Reveal className="flex justify-center">
+          <div className="flex justify-center">
             <div className="inline-flex items-center gap-2 bg-muted/60 border border-border/50 text-muted-foreground px-4 py-2 rounded-full text-[13px] font-medium mb-8 mx-auto">
               <span className="flex h-2 w-2 rounded-full bg-success animate-pulse" />
               Building the future of group travel planning
             </div>
-          </Reveal>
+          </div>
 
-          <Reveal delay={0.1}>
+          <div>
             <h1 className="text-[clamp(2.5rem,6vw,5rem)] font-black tracking-[-0.03em] leading-[1.05] text-foreground max-w-3xl mx-auto text-center">
               Your WhatsApp group
               <br />
@@ -383,89 +383,87 @@ export default function Home() {
                 travel planner.
               </span>
             </h1>
-          </Reveal>
+          </div>
 
-          <Reveal delay={0.2}>
+          <div>
             <p className="text-muted-foreground text-lg md:text-xl max-w-2xl mt-6 leading-relaxed font-light mx-auto text-center">
               Itineraries, maps, checklists, and squad chat — finally in one place.
               Stop scrolling through 400 unread messages to find the hotel address.
             </p>
-          </Reveal>
+          </div>
 
           {/* Waitlist Form */}
-          <Reveal delay={0.3}>
-            <div className="mt-10 w-full max-w-lg mx-auto flex flex-col items-center">
-              {waitlistStatus === "success" ? (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="p-5 rounded-2xl border border-success/30 bg-success/5 text-success flex items-center gap-3 w-full text-left"
-                >
-                  <CheckCircle className="h-5 w-5 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-sm">You're on the list!</p>
-                    <p className="text-xs opacity-80 mt-0.5">We'll send early access to <strong>{waitlistEmail}</strong></p>
-                  </div>
-                </motion.div>
-              ) : (
-                <form onSubmit={handleJoinWaitlist} className="w-full">
-                  <div className="flex flex-col sm:flex-row gap-3 w-full">
-                    <input
-                      type="email"
-                      placeholder="Enter your email..."
-                      required
-                      value={waitlistEmail}
-                      onChange={(e) => setWaitlistEmail(e.target.value)}
-                      disabled={waitlistStatus === "loading"}
-                      className="flex-1 px-5 py-3.5 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 outline-none text-[15px] focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
-                    />
-                    <button
-                      type="submit"
-                      disabled={waitlistStatus === "loading"}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-foreground text-background px-7 py-3.5 text-[15px] font-semibold cursor-pointer disabled:opacity-50 shrink-0 hover:opacity-90 transition-all active:scale-[0.98]"
-                    >
-                      {waitlistStatus === "loading" ? (
-                        <>
-                          <div className="h-4 w-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
-                          Joining...
-                        </>
-                      ) : (
-                        <>
-                          Join the Waitlist
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  {waitlistStatus === "error" && (
-                    <p className="text-xs text-destructive font-medium mt-2 ml-1 text-left">{waitlistError}</p>
-                  )}
-                </form>
-              )}
-
-              {/* Social proof */}
-              <div className="flex items-center justify-center gap-3 mt-6 mx-auto">
-                <div className="flex -space-x-2">
-                  {["bg-primary/25", "bg-secondary/25", "bg-brand-pink/25", "bg-accent/25"].map(
-                    (bg, i) => (
-                      <div
-                        key={i}
-                        className={`h-7 w-7 rounded-full ${bg} border-2 border-background flex items-center justify-center text-[9px] font-bold text-foreground/60`}
-                      >
-                        {["A", "K", "R", "S"][i]}
-                      </div>
-                    )
-                  )}
+          <div className="mt-10 w-full max-w-lg mx-auto flex flex-col items-center">
+            {waitlistStatus === "success" ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-5 rounded-2xl border border-success/30 bg-success/5 text-success flex items-center gap-3 w-full text-left"
+              >
+                <CheckCircle className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-sm">You're on the list!</p>
+                  <p className="text-xs opacity-80 mt-0.5">We'll send early access to <strong>{waitlistEmail}</strong></p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">
-                    <AnimatedCounter target={totalWaitlist} suffix="+" />
-                  </strong>{" "}
-                  travel squads waiting
-                </p>
+              </motion.div>
+            ) : (
+              <form onSubmit={handleJoinWaitlist} className="w-full">
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  <input
+                    type="email"
+                    placeholder="Enter your email..."
+                    required
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    disabled={waitlistStatus === "loading"}
+                    className="flex-1 px-5 py-3.5 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 outline-none text-[15px] focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={waitlistStatus === "loading"}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-foreground text-background px-7 py-3.5 text-[15px] font-semibold cursor-pointer disabled:opacity-50 shrink-0 hover:opacity-90 transition-all active:scale-[0.98]"
+                  >
+                    {waitlistStatus === "loading" ? (
+                      <>
+                        <div className="h-4 w-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                        Joining...
+                      </>
+                    ) : (
+                      <>
+                        Join the Waitlist
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+                {waitlistStatus === "error" && (
+                  <p className="text-xs text-destructive font-medium mt-2 ml-1 text-left">{waitlistError}</p>
+                )}
+              </form>
+            )}
+
+            {/* Social proof */}
+            <div className="flex items-center justify-center gap-3 mt-6 mx-auto">
+              <div className="flex -space-x-2">
+                {["bg-primary/25", "bg-secondary/25", "bg-brand-pink/25", "bg-accent/25"].map(
+                  (bg, i) => (
+                    <div
+                      key={i}
+                      className={`h-7 w-7 rounded-full ${bg} border-2 border-background flex items-center justify-center text-[9px] font-bold text-foreground/60`}
+                    >
+                      {["A", "K", "R", "S"][i]}
+                    </div>
+                  )
+                )}
               </div>
+              <p className="text-sm text-muted-foreground">
+                <strong className="text-foreground">
+                  <AnimatedCounter target={totalWaitlist} suffix="+" />
+                </strong>{" "}
+                travel squads waiting
+              </p>
             </div>
-          </Reveal>
+          </div>
         </div>
       </section>
 
@@ -1307,7 +1305,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Roadmap</h4>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Roadmap</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 1: Foundation</a></li>
               <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 2: AI Planner</a></li>
@@ -1317,7 +1315,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Support</h4>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Support</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><a href="mailto:nxtvibes.app@gmail.com" className="hover:text-foreground transition-colors">Contact Email</a></li>
               <li><a href="#waitlist" className="hover:text-foreground transition-colors">Join Waitlist</a></li>
@@ -1325,7 +1323,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Legal</h4>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Legal</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
               <li><Link href="/terms" className="hover:text-foreground transition-colors">Terms of Use</Link></li>
