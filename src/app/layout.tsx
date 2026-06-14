@@ -10,8 +10,30 @@ import { Navigation } from "@/components/Navigation";
 import { AIAssistantDrawer } from "@/components/AIAssistantDrawer";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { Outfit, Inter, Space_Grotesk } from "next/font/google";
 import "react-day-picker/dist/style.css";
 import "./globals.css";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,9 +111,10 @@ export default function RootLayout({
   const showSidebar = !isPublicPage && pathname !== "/login" && pathname !== "/register";
 
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className={cn("h-full", outfit.variable, inter.variable, spaceGrotesk.variable)}>
       <head>
         <title>NxtVibes — Group Travel Planner & Itinerary Builder</title>
+        <link rel="preconnect" href="https://pcbeldwtogqhffpssjlt.supabase.co" />
         <meta name="google-site-verification" content="wJtck-og082aWD4gT4bN8xBxwQovZwbKlpzPme3RoWg" />
         <meta name="description" content="Ditch the WhatsApp planning chaos. Build day-wise itineraries, auto-pin stops on shared Google Maps, chat in real-time, and sort photos instantly with AI face-scanning." />
         <meta name="keywords" content="travel planner, group travel, itinerary builder, shared map, trip collaboration, face scanner photo sort, split bills" />
@@ -104,9 +127,9 @@ export default function RootLayout({
         <meta name="twitter:description" content="Collaborative trip planning for squads who actually travel together. Get day-wise itineraries, shared checklists, and group chats in one place." />
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-EDEFDL3XEN"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         />
-        <Script id="google-analytics" strategy="afterInteractive">
+        <Script id="google-analytics" strategy="lazyOnload">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}

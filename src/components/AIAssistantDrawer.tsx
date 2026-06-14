@@ -175,6 +175,7 @@ export const AIAssistantDrawer = () => {
       <SheetTrigger asChild>
         <button
           onClick={() => setIsOpen(true)}
+          aria-label="Open AI Travel Assistant"
           className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow hover:scale-105 active:scale-95 transition-transform duration-200 cursor-pointer"
         >
           <Sparkles className="h-6 w-6 animate-pulse" />
@@ -278,6 +279,7 @@ export const AIAssistantDrawer = () => {
           <button
             type="submit"
             disabled={!inputText.trim() || loading}
+            aria-label="Send message"
             className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-glow disabled:opacity-50 shrink-0 cursor-pointer"
           >
             <Send className="h-4 w-4" />

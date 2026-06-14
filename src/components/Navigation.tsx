@@ -165,6 +165,7 @@ export const Navigation = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={toggleTheme}
+            aria-label="Toggle dark mode"
             className="p-2 rounded-full hover:bg-muted text-foreground transition-all cursor-pointer"
           >
             {isDarkMode ? <Sun className="h-5 w-5 text-accent" /> : <Moon className="h-5 w-5" />}
@@ -172,7 +173,10 @@ export const Navigation = () => {
 
           <Sheet>
             <SheetTrigger asChild>
-              <button className="p-2 rounded-full hover:bg-muted text-foreground cursor-pointer">
+              <button
+                aria-label="Toggle navigation menu"
+                className="p-2 rounded-full hover:bg-muted text-foreground cursor-pointer"
+              >
                 <Menu className="h-5 w-5" />
               </button>
             </SheetTrigger>

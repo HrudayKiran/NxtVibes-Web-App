@@ -378,7 +378,7 @@ export default function Home() {
             <h1 className="text-[clamp(2.5rem,6vw,5rem)] font-black tracking-[-0.03em] leading-[1.05] text-foreground max-w-3xl mx-auto text-center">
               Your WhatsApp group
               <br />
-              <span className="text-muted-foreground/40">is not a</span>{" "}
+              <span className="text-muted-foreground">is not a</span>{" "}
               <span className="bg-gradient-to-r from-primary via-brand-pink to-secondary bg-clip-text text-transparent">
                 travel planner.
               </span>
@@ -475,7 +475,7 @@ export default function Home() {
         <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10" />
         <div className="flex animate-marquee whitespace-nowrap">
           {[...marqueeItems, ...marqueeItems].map((item, i) => (
-            <span key={i} className="inline-flex items-center gap-3 mx-6 text-sm text-muted-foreground/70 font-medium">
+            <span key={i} className="inline-flex items-center gap-3 mx-6 text-sm text-foreground/70 font-medium">
               <span className="h-1.5 w-1.5 rounded-full bg-primary/40" />
               {item}
             </span>
@@ -523,6 +523,7 @@ export default function Home() {
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
+                    aria-label={tab.label}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                       activeTab === tab.key
                         ? "bg-background text-foreground shadow-sm"
@@ -551,10 +552,10 @@ export default function Home() {
                   >
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                       <div>
-                        <h4 className="font-bold text-lg flex items-center gap-2">
+                        <h3 className="font-bold text-lg flex items-center gap-2">
                           <Clock className="h-4.5 w-4.5 text-primary" />
                           Day 1 — Bangalore → Coorg
-                        </h4>
+                        </h3>
                         <p className="text-sm text-muted-foreground mt-1">
                           Click tasks to mark them complete. Changes sync to all collaborators.
                         </p>
@@ -585,7 +586,7 @@ export default function Home() {
                               <span className={`text-[10px] bg-${stop.color}/10 text-${stop.color} px-2 py-0.5 rounded-full font-semibold`}>
                                 {stop.time}
                               </span>
-                              <h5 className="font-bold text-sm mt-1.5">{stop.title}</h5>
+                              <h4 className="font-bold text-sm mt-1.5">{stop.title}</h4>
                               <p className="text-xs text-muted-foreground mt-0.5">{stop.desc}</p>
                             </div>
                           </div>
@@ -594,10 +595,10 @@ export default function Home() {
 
                       {/* Checklist */}
                       <div className="lg:col-span-7 bg-muted/15 border border-border/20 rounded-2xl p-5 space-y-3">
-                        <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                           <CheckSquare className="h-3.5 w-3.5 text-primary" />
                           Shared Checklist
-                        </h5>
+                        </h4>
                         <div className="space-y-2">
                           {tasks.map((task) => (
                             <div
@@ -645,10 +646,10 @@ export default function Home() {
                   >
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="font-bold text-lg flex items-center gap-2">
+                        <h3 className="font-bold text-lg flex items-center gap-2">
                           <MapPin className="h-4.5 w-4.5 text-secondary" />
                           Route Overview
-                        </h4>
+                        </h3>
                         <p className="text-sm text-muted-foreground mt-1">
                           Click a stop to focus the map. Every timeline stop auto-pins here.
                         </p>
@@ -739,10 +740,10 @@ export default function Home() {
                   >
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="font-bold text-lg flex items-center gap-2">
+                        <h3 className="font-bold text-lg flex items-center gap-2">
                           <MessageSquare className="h-4.5 w-4.5 text-brand-pink" />
                           Group Chat
-                        </h4>
+                        </h3>
                         <p className="text-sm text-muted-foreground mt-1">
                           Discuss with your friends in real-time to decide where and when to go.
                         </p>
@@ -796,6 +797,7 @@ export default function Home() {
                         />
                         <button
                           type="submit"
+                          aria-label="Send message"
                           className="h-10 w-10 rounded-xl bg-foreground text-background flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
                         >
                           <Send className="h-4 w-4" />
@@ -817,10 +819,10 @@ export default function Home() {
                   >
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="font-bold text-lg flex items-center gap-2">
+                        <h3 className="font-bold text-lg flex items-center gap-2">
                           <Camera className="h-4.5 w-4.5 text-brand-cyan" />
                           AI Photo Matcher
-                        </h4>
+                        </h3>
                         <p className="text-sm text-muted-foreground mt-1">
                           Scan your face to find your photos from the group dump instantly.
                         </p>
@@ -840,13 +842,13 @@ export default function Home() {
                             {faceStep === "scanning" && "Running AI"}
                             {faceStep === "completed" && "Finished"}
                           </span>
-                          <h5 className="font-bold text-base mt-2.5 mb-2">
+                          <h4 className="font-bold text-base mt-2.5 mb-2">
                             {faceStep === "upload_dump" && "Upload Trip Photos"}
                             {faceStep === "upload_face" && "Upload Face Photo"}
                             {faceStep === "ready_to_scan" && "Ready to Scan"}
                             {faceStep === "scanning" && "Matching Faces..."}
                             {faceStep === "completed" && "Matches Found!"}
-                          </h5>
+                          </h4>
                           <p className="text-xs text-muted-foreground leading-relaxed">
                             {faceStep === "upload_dump" && "First, upload the shared photo dump containing all the photos clicked by everyone during the trip."}
                             {faceStep === "upload_face" && "Upload a clear photo of your face or take a quick selfie. The AI will search the trip dump for matches."}
@@ -1085,12 +1087,12 @@ export default function Home() {
                     <feat.icon className="h-5 w-5" />
                   </div>
                   <h3 className="font-bold text-base mb-2 text-foreground group-hover:text-primary transition-colors">{feat.title}</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
+                  <p className="text-xs text-foreground/80 leading-relaxed">
                     {feat.desc}
                   </p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-border/10 flex items-center justify-between">
-                  <span className="text-[9px] font-mono text-muted-foreground/60 uppercase tracking-wider">Features</span>
+                  <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider font-semibold">Features</span>
                   <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${feat.bgClass} ${feat.textClass}`}>
                     {feat.phase}
                   </span>
@@ -1272,6 +1274,7 @@ export default function Home() {
                   onClick={copyEmailToClipboard}
                   className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   title="Copy"
+                  aria-label="Copy email address"
                 >
                   {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                 </button>
@@ -1304,7 +1307,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h5 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Roadmap</h5>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Roadmap</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 1: Foundation</a></li>
               <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 2: AI Planner</a></li>
@@ -1314,7 +1317,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h5 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Support</h5>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Support</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><a href="mailto:nxtvibes.app@gmail.com" className="hover:text-foreground transition-colors">Contact Email</a></li>
               <li><a href="#waitlist" className="hover:text-foreground transition-colors">Join Waitlist</a></li>
@@ -1322,7 +1325,7 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h5 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Legal</h5>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Legal</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
               <li><Link href="/terms" className="hover:text-foreground transition-colors">Terms of Use</Link></li>
