@@ -87,7 +87,7 @@ const updateDOMTheme = (isDark: boolean) => {
 };
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  themeMode: 'system',
+  themeMode: 'light',
   isDarkMode: false,
   colors: lightColors,
   setThemeMode: (mode) => {
@@ -110,7 +110,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   initTheme: () => {
     if (typeof window === 'undefined') return;
     const savedTheme = localStorage.getItem('@nxtvibes_theme') as ThemeMode | null;
-    const initialMode: ThemeMode = savedTheme || 'system';
+    const initialMode: ThemeMode = savedTheme || 'light';
     const isDark = getIsDarkMode(initialMode);
     updateDOMTheme(isDark);
     set({

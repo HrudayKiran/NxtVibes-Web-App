@@ -1,859 +1,1340 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { 
-  Compass, MapPin, Calendar, Users, MessageSquare, Plus, 
-  ArrowRight, Sparkles, Globe, Shield, CheckCircle, Clock, Check,
-  Sun, Moon
+import {
+  MapPin, MessageSquare, ArrowRight, Sparkles, CheckCircle,
+  Clock, Check, Sun, Moon, Copy, Mail, Camera,
+  Smartphone, Smile, Compass, Share2, Layers, CheckSquare,
+  Users, Globe, Send, ChevronRight, ChevronLeft, Play, Zap
 } from "lucide-react";
+import { motion, useInView, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { useThemeStore } from "@/store/themeStore";
 
-export default function Home() {
-  const router = useRouter();
-  const { isDarkMode, toggleTheme } = useThemeStore();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [activeDemo, setActiveDemo] = useState<"timeline" | "map" | "chats" | "ai">("timeline");
-  const [chatType, setChatType] = useState<"group" | "direct">("group");
-  const [aiPromptClicked, setAiPromptClicked] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+/* ─── Types ─── */
+interface Message {
+  id: number;
+  sender: string;
+  text: string;
+  initial: string;
+  isSelf?: boolean;
+}
 
-  const showNotification = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
+/* ─── Reusable Scroll-Reveal Wrapper ─── */
+function Reveal({
+  children,
+  className = "",
+  delay = 0,
+  direction = "up",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  direction?: "up" | "left" | "right" | "none";
+}) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-60px" });
+
+  const variants = {
+    hidden: {
+      opacity: 0,
+      y: direction === "up" ? 40 : 0,
+      x: direction === "left" ? -40 : direction === "right" ? 40 : 0,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      x: 0,
+    },
   };
 
+  return (
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={isInView ? "visible" : "hidden"}
+      variants={variants}
+      transition={{
+        duration: 0.7,
+        delay,
+        ease: [0.25, 0.46, 0.45, 0.94],
+      }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/* ─── Animated Counter ─── */
+function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
+
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setIsLoggedIn(true);
+    if (!isInView) return;
+    let start = 0;
+    const duration = 1800;
+    const increment = target / (duration / 16);
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(start));
       }
-      setLoading(false);
-    };
-    checkUser();
-  }, []);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [isInView, target]);
 
   return (
-    <div className="min-h-screen relative font-sans overflow-x-hidden">
-      {/* Premium Glassmorphic Header */}
-      <header className="sticky top-0 w-full z-50 border-b border-border/20 bg-background/60 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-lg shadow-glow">
+    <span ref={ref} className="tabular-nums">
+      {count}{suffix}
+    </span>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   MAIN PAGE COMPONENT
+   ═══════════════════════════════════════════════════ */
+export default function Home() {
+  const { isDarkMode, toggleTheme } = useThemeStore();
+  const [activeTab, setActiveTab] = useState<"timeline" | "map" | "chat" | "scan">("timeline");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Waitlist
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [waitlistError, setWaitlistError] = useState("");
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
+
+  // Contact
+  const [copied, setCopied] = useState(false);
+
+  // Header scroll state
+  const [scrolled, setScrolled] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Interactive Playground: Checklist
+  const [tasks, setTasks] = useState([
+    { id: 1, text: "Book self-drive rental car", done: true },
+    { id: 2, text: "Confirm Namdroling Monastery timings", done: false },
+    { id: 3, text: "Check-in package at Coorg Resort", done: false },
+    { id: 4, text: "Reserve Mercara Gold coffee walk", done: false },
+  ]);
+
+  // Interactive Playground: Map
+  const [activeStop, setActiveStop] = useState<"A" | "B" | "C">("B");
+
+  // Interactive Playground: Chat
+  const [messages, setMessages] = useState<Message[]>([
+    { id: 1, sender: "Rahul", text: "Hey! Did we confirm the Golden Temple stop for Day 1?", initial: "R" },
+    { id: 2, sender: "Karan", text: "Yes, just added it on the board timeline at 11:30 AM.", initial: "K" },
+    { id: 3, sender: "Sneha", text: "Nice! What time are we hitting Abbey Falls?", initial: "S" },
+    { id: 4, sender: "Karan", text: "Probably around 3:00 PM so we get good lighting for photos!", initial: "K" },
+    { id: 5, sender: "You", text: "Awesome. Let's make sure we leave by 2:00 PM then.", initial: "U", isSelf: true },
+  ]);
+  const [inputMsg, setInputMsg] = useState("");
+
+  // Interactive Playground: Face Scanner
+  const [faceStep, setFaceStep] = useState<"upload_dump" | "upload_face" | "ready_to_scan" | "scanning" | "completed">("upload_dump");
+  const photos = [
+    { id: 1, name: "Monastery Selfie", type: "Monastery", hasUserFace: true, color: "from-purple-500/20 to-blue-500/20" },
+    { id: 2, name: "Group Dinner", type: "Coorg Town", hasUserFace: true, color: "from-rose-500/20 to-orange-500/20" },
+    { id: 3, name: "Trekking Path", type: "Abbey Falls", hasUserFace: false, color: "from-emerald-500/20 to-teal-500/20" },
+    { id: 4, name: "Sunset View", type: "Raja Seat", hasUserFace: false, color: "from-amber-500/20 to-red-500/20" },
+    { id: 5, name: "Coffee Walk", type: "Madikeri", hasUserFace: true, color: "from-indigo-500/20 to-cyan-500/20" },
+    { id: 6, name: "Waterfall Stop", type: "Abbey Falls", hasUserFace: false, color: "from-purple-500/20 to-emerald-500/20" },
+  ];
+
+  // ─── Effects ───
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    fetchWaitlistCount();
+  }, []);
+
+  // ─── Handlers ───
+  const showNotification = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const fetchWaitlistCount = async () => {
+    try {
+      const { data, error } = await supabase.rpc("get_waitlist_count");
+      if (error) throw error;
+      if (data !== null) setWaitlistCount(Number(data));
+    } catch (err) {
+      console.error("Error fetching waitlist count:", err);
+    }
+  };
+
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistEmail || !waitlistEmail.includes("@")) {
+      setWaitlistStatus("error");
+      setWaitlistError("Please enter a valid email address.");
+      return;
+    }
+    setWaitlistStatus("loading");
+    try {
+      const { error } = await supabase
+        .from("waitlist")
+        .insert([{ email: waitlistEmail.trim().toLowerCase() }]);
+
+      if (error) {
+        if (error.code === "23505") {
+          setWaitlistStatus("success");
+          showNotification("You're already on the waitlist! 🎉");
+        } else {
+          throw error;
+        }
+      } else {
+        setWaitlistStatus("success");
+        showNotification("Welcome to the waitlist! 🎉");
+        fetchWaitlistCount();
+      }
+    } catch (err: any) {
+      console.error("Waitlist error:", err);
+      setWaitlistStatus("error");
+      setWaitlistError(err.message || "Failed to join. Please try again.");
+    }
+  };
+
+  const copyEmailToClipboard = () => {
+    navigator.clipboard.writeText("nxtvibes.app@gmail.com");
+    setCopied(true);
+    showNotification("Email copied to clipboard! 📋");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const toggleTask = (id: number) => {
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  };
+
+  const handleSendMsg = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMsg.trim()) return;
+    const newMsg: Message = {
+      id: messages.length + 1,
+      sender: "You",
+      text: inputMsg.trim(),
+      initial: "U",
+      isSelf: true,
+    };
+    setMessages([...messages, newMsg]);
+    setInputMsg("");
+  };
+
+  const handleUploadDump = () => {
+    setFaceStep("upload_face");
+    showNotification("15 trip photos uploaded successfully! 📸");
+  };
+
+  const handleUploadFace = () => {
+    setFaceStep("ready_to_scan");
+    showNotification("Face photo uploaded successfully! 👤");
+  };
+
+  const startFaceScan = () => {
+    setFaceStep("scanning");
+    setTimeout(() => {
+      setFaceStep("completed");
+      showNotification("AI Face-Scan sorted! Found 3 matching photos.");
+    }, 2500);
+  };
+
+  const resetFaceScan = () => {
+    setFaceStep("upload_dump");
+  };
+
+  const handleScrollLeft = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: -360, behavior: "smooth" });
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: 360, behavior: "smooth" });
+    }
+  };
+
+  const totalWaitlist = waitlistCount !== null ? 150 + waitlistCount : 150;
+
+  const tabItems = [
+    { key: "timeline" as const, label: "Timeline", icon: Clock, color: "text-primary" },
+    { key: "map" as const, label: "Map View", icon: MapPin, color: "text-secondary" },
+    { key: "chat" as const, label: "Group Chat", icon: MessageSquare, color: "text-brand-pink" },
+    { key: "scan" as const, label: "Face Scan", icon: Camera, color: "text-brand-cyan" },
+  ];
+
+  const marqueeItems = [
+    "Real-time collaboration",
+    "Day-wise itineraries",
+    "Google Maps integration",
+    "Shared checklists",
+    "Group & direct chats",
+    "AI trip planning",
+    "Face-scan photo matching",
+    "Split bills with friends",
+    "Share to WhatsApp",
+    "Invite collaborators",
+  ];
+
+  /* ════════════════════════════════════════════
+     RENDER
+     ════════════════════════════════════════════ */
+  return (
+    <div className="min-h-screen relative font-sans overflow-x-hidden transition-colors duration-300">
+      {/* Grain Texture */}
+      <div className="grain-overlay" />
+
+      {/* Floating Toast */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-6 right-6 z-[100] flex items-center gap-2.5 rounded-2xl bg-foreground text-background px-5 py-3 shadow-2xl text-sm font-semibold"
+          >
+            <CheckCircle className="h-4 w-4 text-success shrink-0" />
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── HEADER ─── */}
+      <header
+        className={`fixed top-0 w-full z-50 transition-all duration-500 ${
+          scrolled
+            ? "bg-background/80 backdrop-blur-xl border-b border-border/30 shadow-sm"
+            : "bg-transparent border-b border-transparent"
+        }`}
+      >
+        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-brand-pink text-white font-extrabold text-sm shadow-lg">
               NV
             </div>
-            <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
+            <span className="font-extrabold text-lg tracking-tight text-foreground">
               NxtVibes
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Theme Toggle Button */}
+          <nav className="flex items-center gap-2 md:gap-5">
+            <a href="#features" className="hidden sm:block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Features
+            </a>
+            <a href="#roadmap" className="hidden sm:block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Roadmap
+            </a>
+            <a href="#contact" className="hidden sm:block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Contact
+            </a>
+
+            <div className="h-4 w-px bg-border/40 hidden sm:block" />
+
             <button
               onClick={toggleTheme}
-              className="p-2.5 rounded-xl hover:bg-muted text-foreground transition-all cursor-pointer border border-border/15 bg-card/45 backdrop-blur-sm shadow-sm flex items-center justify-center"
+              className="p-2 rounded-xl hover:bg-muted/60 text-foreground/70 hover:text-foreground transition-all cursor-pointer"
               aria-label="Toggle Theme"
             >
-              {isDarkMode ? <Sun className="h-4 w-4 text-accent" /> : <Moon className="h-4 w-4" />}
+              {isDarkMode ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
             </button>
 
-            {loading ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            ) : isLoggedIn ? (
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-1.5 px-4.5 py-2 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-premium hover:opacity-90 transition-opacity"
-              >
-                Go to Dashboard
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-xs font-bold hover:text-primary transition-colors px-3 py-2"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/register"
-                  className="flex items-center gap-1.5 px-4.5 py-2 rounded-xl bg-primary text-xs font-bold text-primary-foreground shadow-premium hover:opacity-90 transition-opacity"
-                >
-                  Get Started
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </>
-            )}
-          </div>
+            <a
+              href="#waitlist"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-foreground text-background text-[13px] font-semibold hover:opacity-90 transition-opacity"
+            >
+              Join Beta
+              <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </nav>
         </div>
       </header>
 
-      {/* Hero Section - Split Screen layout */}
-      <section className="max-w-6xl mx-auto px-4 pt-12 md:pt-20 pb-20 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-        {/* Left Column: Headline and Actions */}
-        <div className="lg:col-span-7 space-y-6 text-left">
-          <div className="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary px-3.5 py-1.5 rounded-full text-xs font-bold animate-pulse">
-            <Sparkles className="h-3.5 w-3.5" />
-            Cooperative Travel Planning Redefined
-          </div>
+      {/* ─── HERO SECTION ─── */}
+      <section id="waitlist" className="relative pt-32 md:pt-44 pb-20 px-5 bg-[radial-gradient(circle_at_20%_25%,rgba(157,116,247,0.03),transparent_50%),radial-gradient(circle_at_80%_55%,rgba(236,72,153,0.03),transparent_50%)]">
 
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-tight bg-gradient-to-b from-foreground to-foreground/75 bg-clip-text text-transparent">
-            Plan Your Next <br/>
-            <span className="bg-gradient-to-r from-primary via-brand-pink to-brand-cyan bg-clip-text text-transparent">Travel Vibe</span> Together
-          </h1>
+        <div className="max-w-4xl mx-auto flex flex-col items-center text-center">
+          <Reveal className="flex justify-center">
+            <div className="inline-flex items-center gap-2 bg-muted/60 border border-border/50 text-muted-foreground px-4 py-2 rounded-full text-[13px] font-medium mb-8 mx-auto">
+              <span className="flex h-2 w-2 rounded-full bg-success animate-pulse" />
+              Building the future of group travel planning
+            </div>
+          </Reveal>
 
-          <p className="text-muted-foreground text-sm md:text-base max-w-xl leading-relaxed">
-            Planning trips shouldn't feel like work. Sync your maps, checklist goals, notes, and schedules in a single dynamic board. Experience collaborative traveling with AI recommendation assistance.
-          </p>
+          <Reveal delay={0.1}>
+            <h1 className="text-[clamp(2.5rem,6vw,5rem)] font-black tracking-[-0.03em] leading-[1.05] text-foreground max-w-3xl mx-auto text-center">
+              Your WhatsApp group
+              <br />
+              <span className="text-muted-foreground/40">is not a</span>{" "}
+              <span className="bg-gradient-to-r from-primary via-brand-pink to-secondary bg-clip-text text-transparent">
+                travel planner.
+              </span>
+            </h1>
+          </Reveal>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
-            {isLoggedIn ? (
-              <Link
-                href="/dashboard"
-                className="flex items-center justify-center gap-2 rounded-2xl btn-premium px-8 py-4 text-sm font-bold text-primary-foreground shadow-premium w-full sm:w-auto"
-              >
-                Enter Dashboard
-                <ArrowRight className="h-4.5 w-4.5" />
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/register"
-                  className="flex items-center justify-center gap-2 rounded-2xl btn-premium px-8 py-4 text-sm font-bold text-primary-foreground shadow-premium w-full sm:w-auto"
+          <Reveal delay={0.2}>
+            <p className="text-muted-foreground text-lg md:text-xl max-w-2xl mt-6 leading-relaxed font-light mx-auto text-center">
+              Itineraries, maps, checklists, and squad chat — finally in one place.
+              Stop scrolling through 400 unread messages to find the hotel address.
+            </p>
+          </Reveal>
+
+          {/* Waitlist Form */}
+          <Reveal delay={0.3}>
+            <div className="mt-10 w-full max-w-lg mx-auto flex flex-col items-center">
+              {waitlistStatus === "success" ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="p-5 rounded-2xl border border-success/30 bg-success/5 text-success flex items-center gap-3 w-full text-left"
                 >
-                  Create a Plan for Free
-                  <ArrowRight className="h-4.5 w-4.5" />
-                </Link>
-                <a
-                  href="#features"
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-border/50 bg-card/65 backdrop-blur-md px-8 py-4 text-sm font-bold text-foreground hover:bg-muted/30 transition-colors w-full sm:w-auto"
-                >
-                  Explore Features
-                </a>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Visual Hologram Frame */}
-        <div className="lg:col-span-5 relative w-full flex justify-center animate-floating">
-          {/* Ambient Glow backing */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-primary/30 to-brand-pink/30 blur-3xl -z-10 rounded-full scale-90" />
-          
-          <div className="rounded-3xl border border-border/40 bg-card/45 backdrop-blur-lg p-3.5 shadow-premium overflow-hidden w-full max-w-md">
-            <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-border/30">
-              <img 
-                src="/hero_travel_mockup.png" 
-                alt="NxtVibes Visual Board Mockup" 
-                className="h-full w-full object-cover rounded-2xl hover:scale-105 transition-transform duration-700" 
-              />
-              {/* Floating glass overlay card */}
-              <div className="absolute bottom-3 left-3 right-3 glass-panel p-3 rounded-xl border border-white/10 flex items-center justify-between gap-3 shadow-premium">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-success/20 flex items-center justify-center text-success">
-                    <Check className="h-4 w-4" />
-                  </div>
+                  <CheckCircle className="h-5 w-5 shrink-0" />
                   <div>
-                    <h5 className="text-[10px] font-black leading-none">Coorg Weekend</h5>
-                    <p className="text-[8px] text-muted-foreground mt-1">3 Collaborators Active</p>
+                    <p className="font-semibold text-sm">You're on the list!</p>
+                    <p className="text-xs opacity-80 mt-0.5">We'll send early access to <strong>{waitlistEmail}</strong></p>
                   </div>
-                </div>
-                <div className="flex -space-x-1.5 overflow-hidden">
-                  <span className="h-6 w-6 rounded-full bg-primary/20 border border-background text-[8px] font-bold flex items-center justify-center">A</span>
-                  <span className="h-6 w-6 rounded-full bg-secondary/20 border border-background text-[8px] font-bold flex items-center justify-center">B</span>
-                  <span className="h-6 w-6 rounded-full bg-accent/20 border border-background text-[8px] font-bold flex items-center justify-center">C</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Showcase Section */}
-      <section id="features" className="max-w-6xl mx-auto px-4 py-20 relative z-10 border-t border-border/30">
-        <div className="text-center max-w-xl mx-auto mb-16">
-          <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">Everything You Need for the Perfect Trip</h2>
-          <p className="text-sm text-muted-foreground mt-2">Ditch the mess of tabs, emails, and notes. Sync it all in a unified travel environment.</p>
-        </div>
-
-        {/* Feature Grid with details & visual cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Timelines */}
-          <div className="rounded-3xl border border-border/40 bg-card/65 backdrop-blur-md p-6 shadow-premium premium-card flex flex-col justify-between min-h-[300px]">
-            <div>
-              <div className="h-10 w-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary mb-4 shadow-sm shadow-primary/5">
-                <Clock className="h-5 w-5" />
-              </div>
-              <h4 className="font-bold text-base mb-2">Visual Day-by-Day Timeline</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Build timelines with drag-and-drop support. Add destinations, schedule visits, input timings, and edit routes instantly with automatic WebSocket synchronization.
-              </p>
-            </div>
-            <div className="mt-4 pt-4 border-t border-border/20 flex items-center justify-between">
-              <span className="text-[10px] font-black text-primary uppercase">Explore timelines</span>
-              <span className="text-[10px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-bold border border-primary/10">Synchronized</span>
-            </div>
-          </div>
-
-          {/* Card 2: Collaboration with Image */}
-          <div className="rounded-3xl border border-border/40 bg-card/65 backdrop-blur-md p-5 shadow-premium premium-card flex flex-col justify-between min-h-[300px]">
-            <div>
-              <div className="relative aspect-[16/10] w-full rounded-2xl overflow-hidden mb-4 border border-border/30">
-                <img 
-                  src="/collaborative_travel_vibes.png" 
-                  alt="Friends around a beach campfire" 
-                  className="h-full w-full object-cover rounded-2xl" 
-                />
-              </div>
-              <h4 className="font-bold text-base mb-2">Social Trip Collaboration</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Add friends to your board. Jointly compile packing checklists, suggest food recommendations, and share direct or group chat logs.
-              </p>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-[10px] font-black text-secondary uppercase">Websockets active</span>
-              <span className="text-[10px] bg-secondary/10 text-secondary px-2.5 py-0.5 rounded-full font-bold border border-secondary/10">Group Sync</span>
-            </div>
-          </div>
-
-          {/* Card 3: AI Assistant with Image */}
-          <div className="rounded-3xl border border-border/40 bg-card/65 backdrop-blur-md p-5 shadow-premium premium-card flex flex-col justify-between min-h-[300px]">
-            <div>
-              <div className="relative aspect-[16/10] w-full rounded-2xl overflow-hidden mb-4 border border-border/30">
-                <img 
-                  src="/ai_travel_assistant.png" 
-                  alt="Futuristic AI recommendations interface" 
-                  className="h-full w-full object-cover rounded-2xl" 
-                />
-              </div>
-              <h4 className="font-bold text-base mb-2">AI Travel Guide recommendations</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Stuck on destinations? Consult the floating AI Travel Assistant drawer to parse web data and inject formatted itinerary details directly.
-              </p>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-[10px] font-black text-accent uppercase">Assistant online</span>
-              <span className="text-[10px] bg-accent/10 text-accent px-2.5 py-0.5 rounded-full font-bold border border-accent/10">AI Recommendations</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Interactive App Sandbox Section */}
-      <section className="max-w-6xl mx-auto px-4 py-20 relative z-10 border-t border-border/30">
-        <div className="text-center max-w-xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-1.5 bg-secondary/10 border border-secondary/20 text-secondary px-3 py-1 rounded-full text-xs font-bold mb-4">
-            Interactive Playground
-          </div>
-          <h2 className="text-3xl font-black tracking-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">Experience the Live Workspace</h2>
-          <p className="text-sm text-muted-foreground mt-2">Get a hands-on preview of how NxtVibes helps you plan, navigate, communicate, and optimize your trip.</p>
-        </div>
-
-        {/* Tab Controls */}
-        <div className="flex flex-wrap justify-center gap-2 mb-10">
-          <button 
-            onClick={() => setActiveDemo("timeline")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
-              activeDemo === "timeline" 
-                ? "bg-primary text-primary-foreground shadow-glow scale-[1.02]" 
-                : "bg-card/50 text-muted-foreground hover:bg-card hover:text-foreground border border-border/30"
-            }`}
-          >
-            <Clock className="h-4 w-4" />
-            Itinerary Timeline
-          </button>
-          <button 
-            onClick={() => setActiveDemo("map")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
-              activeDemo === "map" 
-                ? "bg-primary text-primary-foreground shadow-glow scale-[1.02]" 
-                : "bg-card/50 text-muted-foreground hover:bg-card hover:text-foreground border border-border/30"
-            }`}
-          >
-            <MapPin className="h-4 w-4" />
-            Route Mapview
-          </button>
-          <button 
-            onClick={() => setActiveDemo("chats")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
-              activeDemo === "chats" 
-                ? "bg-primary text-primary-foreground shadow-glow scale-[1.02]" 
-                : "bg-card/50 text-muted-foreground hover:bg-card hover:text-foreground border border-border/30"
-            }`}
-          >
-            <MessageSquare className="h-4 w-4" />
-            Direct & Group Chats
-          </button>
-          <button 
-            onClick={() => setActiveDemo("ai")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer ${
-              activeDemo === "ai" 
-                ? "bg-primary text-primary-foreground shadow-glow scale-[1.02]" 
-                : "bg-card/50 text-muted-foreground hover:bg-card hover:text-foreground border border-border/30"
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            AI Travel Assistant
-          </button>
-        </div>
-
-        {/* Sandbox Content Screen */}
-        <div className="rounded-3xl border border-border/40 bg-card/65 backdrop-blur-md shadow-premium p-6 md:p-8 min-h-[460px] flex flex-col justify-between relative overflow-hidden">
-          {/* Decorative gradients */}
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
-          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-secondary/10 rounded-full blur-[100px] pointer-events-none" />
-
-          {/* Interactive feedback Toast Notification */}
-          {toastMessage && (
-            <div className="absolute top-4 right-4 z-50 flex items-center gap-2 rounded-2xl bg-success text-success-foreground px-4.5 py-3 shadow-premium text-xs font-bold border border-white/10 animate-bounce">
-              <CheckCircle className="h-4 w-4" />
-              {toastMessage}
-            </div>
-          )}
-
-          <div className="flex-1 w-full relative z-10">
-            {/* Timeline Demo Screen */}
-            {activeDemo === "timeline" && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex justify-between items-center border-b border-border/20 pb-4 mb-4">
-                  <div>
-                    <h4 className="font-extrabold text-lg">Visual Timeline Builder</h4>
-                    <p className="text-xs text-muted-foreground">Drag and reorder cards, sync events with your group, and plan day-by-day.</p>
-                  </div>
-                  <span className="text-[10px] bg-primary/15 text-primary border border-primary/20 px-3 py-1 rounded-full font-bold uppercase tracking-wider">Day 1 &bull; Coorg Exploration</span>
-                </div>
-
-                <div className="relative border-l border-primary/30 ml-4 md:ml-8 pl-6 md:pl-10 space-y-8">
-                  {/* Timeline Stop 1 */}
-                  <div className="relative group">
-                    <span className="absolute -left-[31px] md:-left-[47px] top-1 h-6 w-6 rounded-full bg-background border-2 border-primary flex items-center justify-center text-[10px] font-black group-hover:scale-110 transition-transform shadow-glow">1</span>
-                    <div className="p-4 rounded-2xl border border-border/40 bg-card/50 hover:bg-card transition-all shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          09:00 AM - 10:30 AM
-                        </div>
-                        <h5 className="font-bold text-sm text-foreground">Drive from Bangalore Airport</h5>
-                        <p className="text-xs text-muted-foreground mt-0.5">Pick up self-drive vehicle, grab coffee and light breakfast on highway.</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">Transit</span>
-                        <span className="text-[10px] bg-success/10 text-success border border-success/20 px-2 py-0.5 rounded-full font-semibold">Confirmed</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Timeline Stop 2 */}
-                  <div className="relative group">
-                    <span className="absolute -left-[31px] md:-left-[47px] top-1 h-6 w-6 rounded-full bg-background border-2 border-primary flex items-center justify-center text-[10px] font-black group-hover:scale-110 transition-transform shadow-glow">2</span>
-                    <div className="p-4 rounded-2xl border border-border/40 bg-card/50 hover:bg-card transition-all shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-secondary mb-1">
-                          <MapPin className="h-3.5 w-3.5" />
-                          11:30 AM - 01:00 PM
-                        </div>
-                        <h5 className="font-bold text-sm text-foreground">Bylakuppe Namdroling Monastery (Golden Temple)</h5>
-                        <p className="text-xs text-muted-foreground mt-0.5">Explore the Tibetan settlement, marvel at the 40ft golden Buddha statues.</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">Spiritual</span>
-                        <span className="text-[10px] bg-accent/10 text-accent border border-accent/20 px-2 py-0.5 rounded-full font-semibold">Pending Review</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Timeline Stop 3 */}
-                  <div className="relative group">
-                    <span className="absolute -left-[31px] md:-left-[47px] top-1 h-6 w-6 rounded-full bg-background border-2 border-primary flex items-center justify-center text-[10px] font-black group-hover:scale-110 transition-transform shadow-glow">3</span>
-                    <div className="p-4 rounded-2xl border border-border/40 bg-card/50 hover:bg-card transition-all shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-brand-pink mb-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          02:30 PM - 04:30 PM
-                        </div>
-                        <h5 className="font-bold text-sm text-foreground">Abbey Falls Trek & Sightseeing</h5>
-                        <p className="text-xs text-muted-foreground mt-0.5">Walk down the coffee plantations to reach the hanging bridge viewport over Abbey Falls.</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-semibold">Nature</span>
-                        <button 
-                          onClick={() => showNotification("Day 1 timeline optimized by AI!")}
-                          className="text-[10px] bg-primary text-primary-foreground px-2.5 py-1 rounded-lg font-bold shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
-                        >
-                          Optimize Path
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Mapview Demo Screen */}
-            {activeDemo === "map" && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex justify-between items-center border-b border-border/20 pb-4 mb-4">
-                  <div>
-                    <h4 className="font-extrabold text-lg">Interactive GPS Route Map</h4>
-                    <p className="text-xs text-muted-foreground">Visualize travel directions, estimate distance, and link details directly to your coordinates.</p>
-                  </div>
-                  <span className="text-[10px] bg-secondary/15 text-secondary border border-secondary/20 px-3 py-1 rounded-full font-bold uppercase tracking-wider">Trip Route Map</span>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left Column: Route Stats */}
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-border/40 bg-card/40 p-4 shadow-sm">
-                      <h5 className="font-bold text-xs text-muted-foreground uppercase tracking-wider mb-2">Distance & Duration</h5>
-                      <div className="flex justify-between items-end">
-                        <div>
-                          <p className="text-2xl font-black bg-gradient-to-r from-primary to-brand-cyan bg-clip-text text-transparent">268 km</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Via NH 75 Route</p>
-                        </div>
-                        <span className="text-xs font-semibold text-foreground/80">Est: 5 hr 15 min</span>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border/40 bg-card/40 p-4 shadow-sm space-y-3">
-                      <h5 className="font-bold text-xs text-muted-foreground uppercase tracking-wider">Stops on Map</h5>
-                      
-                      <div className="flex items-center gap-3 text-xs">
-                        <div className="h-6 w-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-[10px]">A</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold truncate text-foreground text-xs">Bangalore (Start)</p>
-                          <p className="text-[10px] text-muted-foreground truncate">Kempegowda Int Airport</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-xs">
-                        <div className="h-6 w-6 rounded-full bg-secondary/20 border border-secondary/40 flex items-center justify-center font-bold text-secondary text-[10px]">B</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold truncate text-foreground text-xs">Bylakuppe</p>
-                          <p className="text-[10px] text-muted-foreground truncate">Namdroling Golden Temple</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-xs">
-                        <div className="h-6 w-6 rounded-full bg-brand-pink/20 border border-brand-pink/40 flex items-center justify-center font-bold text-brand-pink text-[10px]">C</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold truncate text-foreground text-xs">Coorg (End)</p>
-                          <p className="text-[10px] text-muted-foreground truncate">Abbey Falls / Hotel</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Stylized Visual Map Sandbox */}
-                  <div className="lg:col-span-2 rounded-2xl border border-border/40 bg-card/50 aspect-video relative flex items-center justify-center overflow-hidden min-h-[260px]">
-                    {/* Simulated Map Grid */}
-                    <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] opacity-40" />
-                    
-                    {/* Topographic Vector-like curves */}
-                    <div className="absolute top-1/4 left-1/3 w-32 h-32 rounded-full border border-primary/10 opacity-20 scale-[1.5]" />
-                    <div className="absolute bottom-1/4 right-1/4 w-44 h-44 rounded-full border border-secondary/10 opacity-20 scale-[1.2]" />
-
-                    {/* Animated path line (SVG Drawing) */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                      <path 
-                        d="M 60,180 Q 150,60 240,150 T 400,90" 
-                        fill="none" 
-                        stroke="url(#map-line-grad)" 
-                        strokeWidth="3.5" 
-                        strokeDasharray="8 6"
-                      />
-                      <defs>
-                        <linearGradient id="map-line-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#9d74f7" />
-                          <stop offset="50%" stopColor="#EC4899" />
-                          <stop offset="100%" stopColor="#06B6D4" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-
-                    {/* Map Marker A */}
-                    <div className="absolute left-[52px] top-[168px] group cursor-pointer flex flex-col items-center">
-                      <div className="h-7 w-7 rounded-full bg-primary/20 border border-primary flex items-center justify-center text-xs font-bold text-foreground shadow-glow group-hover:scale-110 transition-transform">A</div>
-                      <div className="absolute top-8 bg-card border border-border/60 p-2 rounded-lg text-[9px] font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                        Bangalore Starting Point
-                      </div>
-                    </div>
-
-                    {/* Map Marker B */}
-                    <div className="absolute left-[190px] top-[95px] group cursor-pointer flex flex-col items-center">
-                      <div className="h-7 w-7 rounded-full bg-secondary/20 border border-secondary flex items-center justify-center text-xs font-bold text-foreground shadow-glow group-hover:scale-110 transition-transform">B</div>
-                      <div className="absolute top-8 bg-card border border-border/60 p-2 rounded-lg text-[9px] font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                        Bylakuppe Stop (Golden Temple)
-                      </div>
-                    </div>
-
-                    {/* Map Marker C */}
-                    <div className="absolute left-[360px] top-[70px] group cursor-pointer flex flex-col items-center">
-                      <div className="h-7 w-7 rounded-full bg-brand-pink/20 border border-brand-pink flex items-center justify-center text-xs font-bold text-foreground shadow-glow group-hover:scale-110 transition-transform">C</div>
-                      <div className="absolute top-8 bg-card border border-border/60 p-2 rounded-lg text-[9px] font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                        Coorg Itinerary Destination
-                      </div>
-                    </div>
-
-                    {/* Stylized Floating controls overlay */}
-                    <div className="absolute bottom-3 right-3 flex flex-col gap-1.5 glass-panel p-1.5 rounded-xl border border-white/10 z-20">
-                      <button 
-                        onClick={() => showNotification("Map center updated to destination.")}
-                        className="text-[9px] bg-primary text-primary-foreground px-3 py-1.5 rounded-lg font-bold shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
-                      >
-                        Recenter
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Chats Demo Screen */}
-            {activeDemo === "chats" && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex justify-between items-center border-b border-border/20 pb-4 mb-4">
-                  <div>
-                    <h4 className="font-extrabold text-lg">Real-Time Chat Interface</h4>
-                    <p className="text-xs text-muted-foreground">Collaborate on the fly. Share recommendations and keep everybody on the same page.</p>
-                  </div>
-                  {/* Chat Selector */}
-                  <div className="flex gap-1 p-0.5 rounded-xl bg-muted/60 border border-border/30">
-                    <button 
-                      onClick={() => setChatType("group")}
-                      className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        chatType === "group" 
-                          ? "bg-card text-foreground shadow-sm" 
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                </motion.div>
+              ) : (
+                <form onSubmit={handleJoinWaitlist} className="w-full">
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    <input
+                      type="email"
+                      placeholder="Enter your email..."
+                      required
+                      value={waitlistEmail}
+                      onChange={(e) => setWaitlistEmail(e.target.value)}
+                      disabled={waitlistStatus === "loading"}
+                      className="flex-1 px-5 py-3.5 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm text-foreground placeholder:text-muted-foreground/60 outline-none text-[15px] focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
+                    />
+                    <button
+                      type="submit"
+                      disabled={waitlistStatus === "loading"}
+                      className="flex items-center justify-center gap-2 rounded-xl bg-foreground text-background px-7 py-3.5 text-[15px] font-semibold cursor-pointer disabled:opacity-50 shrink-0 hover:opacity-90 transition-all active:scale-[0.98]"
                     >
-                      Group Chat
-                    </button>
-                    <button 
-                      onClick={() => setChatType("direct")}
-                      className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        chatType === "direct" 
-                          ? "bg-card text-foreground shadow-sm" 
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Direct (AI Agent)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 border border-border/40 rounded-2xl bg-card/40 overflow-hidden shadow-sm min-h-[300px]">
-                  {/* Sidebar Rooms */}
-                  <div className="border-r border-border/30 bg-muted/20 p-3 hidden md:block md:col-span-1 space-y-2">
-                    <div 
-                      onClick={() => setChatType("group")}
-                      className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                        chatType === "group" ? "bg-primary/10 border border-primary/20" : "hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="h-8 w-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">CS</div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold truncate text-foreground">Coorg Squad</p>
-                        <p className="text-[9px] text-muted-foreground truncate">Rahul: We are ready!</p>
-                      </div>
-                    </div>
-
-                    <div 
-                      onClick={() => setChatType("direct")}
-                      className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                        chatType === "direct" ? "bg-primary/10 border border-primary/20" : "hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="h-8 w-8 rounded-full bg-secondary/20 text-secondary flex items-center justify-center font-bold text-xs">🤖</div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold truncate text-foreground">Sarah (AI Guide)</p>
-                        <p className="text-[9px] text-muted-foreground truncate">I found 3 great cafes...</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Messaging Area */}
-                  <div className="md:col-span-3 flex flex-col justify-between p-4 bg-card/10 min-h-[260px]">
-                    <div className="space-y-4 overflow-y-auto max-h-[190px] pr-2">
-                      {chatType === "group" ? (
+                      {waitlistStatus === "loading" ? (
                         <>
-                          {/* Message 1 */}
-                          <div className="flex gap-2.5 items-start">
-                            <div className="h-8 w-8 rounded-full bg-primary/20 border border-primary/10 flex items-center justify-center text-[10px] font-bold shrink-0">R</div>
-                            <div className="rounded-2xl border border-border/40 bg-card/65 px-4 py-2.5 max-w-[80%] text-xs shadow-sm">
-                              <p className="font-bold text-[10px] text-primary">Rahul Kumar</p>
-                              <p className="text-foreground/80 mt-1">Hey guys! Did anyone book the coffee plantation walk for Day 2?</p>
-                              <span className="text-[8px] text-muted-foreground block text-right mt-1.5">02:15 PM</span>
-                            </div>
-                          </div>
-
-                          {/* Message 2 */}
-                          <div className="flex gap-2.5 items-start justify-end">
-                            <div className="rounded-2xl border border-white/5 bg-primary px-4 py-2.5 max-w-[80%] text-xs text-primary-foreground shadow-sm">
-                              <p className="font-bold text-[10px] text-primary-foreground/90">You</p>
-                              <p className="mt-1">Yes, I added it to our checklist on NxtVibes. Sarah (our AI assistant) is helping confirm timing.</p>
-                              <span className="text-[8px] opacity-75 block text-right mt-1.5">02:17 PM</span>
-                            </div>
-                            <div className="h-8 w-8 rounded-full bg-secondary/20 border border-secondary/10 flex items-center justify-center text-[10px] font-bold shrink-0">U</div>
-                          </div>
-
-                          {/* Message 3 */}
-                          <div className="flex gap-2.5 items-start">
-                            <div className="h-8 w-8 rounded-full bg-accent/20 border border-accent/10 flex items-center justify-center text-[10px] font-bold shrink-0">K</div>
-                            <div className="rounded-2xl border border-border/40 bg-card/65 px-4 py-2.5 max-w-[80%] text-xs shadow-sm">
-                              <p className="font-bold text-[10px] text-accent">Karan Johar</p>
-                              <p className="text-foreground/80 mt-1">Perfect! Let's check the map to see if we can do Bylakuppe Temple on the way there.</p>
-                              <span className="text-[8px] text-muted-foreground block text-right mt-1.5">02:18 PM</span>
-                            </div>
-                          </div>
+                          <div className="h-4 w-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                          Joining...
                         </>
                       ) : (
                         <>
-                          {/* Message 1 */}
-                          <div className="flex gap-2.5 items-start">
-                            <div className="h-8 w-8 rounded-full bg-secondary/20 border border-secondary/10 flex items-center justify-center text-[10px] font-bold shrink-0">🤖</div>
-                            <div className="rounded-2xl border border-border/40 bg-card/65 px-4 py-2.5 max-w-[80%] text-xs shadow-sm">
-                              <p className="font-bold text-[10px] text-secondary">Sarah (AI Travel Guide)</p>
-                              <p className="text-foreground/80 mt-1">Hello! I found 2 highly-rated coffee plantation tours in Madikeri, Coorg:</p>
-                              <ul className="list-disc pl-4 mt-1 space-y-1 text-muted-foreground text-[11px]">
-                                <li>Mercara Gold Estate (₹350/person)</li>
-                                <li>Coorg Express Walks (₹500/person)</li>
-                              </ul>
-                              <span className="text-[8px] text-muted-foreground block text-right mt-1.5">01:30 PM</span>
-                            </div>
-                          </div>
-
-                          {/* Message 2 */}
-                          <div className="flex gap-2.5 items-start justify-end">
-                            <div className="rounded-2xl border border-white/5 bg-primary px-4 py-2.5 max-w-[80%] text-xs text-primary-foreground shadow-sm">
-                              <p className="font-bold text-[10px] text-primary-foreground/90">You</p>
-                              <p className="mt-1">Add Mercara Gold Estate to checklist and notify Rahul.</p>
-                              <span className="text-[8px] opacity-75 block text-right mt-1.5">01:32 PM</span>
-                            </div>
-                            <div className="h-8 w-8 rounded-full bg-secondary/20 border border-secondary/10 flex items-center justify-center text-[10px] font-bold shrink-0">U</div>
-                          </div>
-
-                          {/* Message 3 */}
-                          <div className="flex gap-2.5 items-start">
-                            <div className="h-8 w-8 rounded-full bg-secondary/20 border border-secondary/10 flex items-center justify-center text-[10px] font-bold shrink-0">🤖</div>
-                            <div className="rounded-2xl border border-border/40 bg-card/65 px-4 py-2.5 max-w-[80%] text-xs shadow-sm">
-                              <p className="font-bold text-[10px] text-secondary">Sarah (AI Travel Guide)</p>
-                              <p className="text-foreground/80 mt-1">Done! I have added "Book Mercara Gold Tour" to your checklist under the "Day 2 Activities" category.</p>
-                              <span className="text-[8px] text-muted-foreground block text-right mt-1.5">01:32 PM</span>
-                            </div>
-                          </div>
+                          Join the Waitlist
+                          <ArrowRight className="h-4 w-4" />
                         </>
                       )}
-                    </div>
+                    </button>
+                  </div>
+                  {waitlistStatus === "error" && (
+                    <p className="text-xs text-destructive font-medium mt-2 ml-1 text-left">{waitlistError}</p>
+                  )}
+                </form>
+              )}
 
-                    {/* Chat Input mock */}
-                    <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/20">
-                      <input 
-                        type="text" 
-                        placeholder={chatType === "group" ? "Message group..." : "Ask Sarah anything..."}
-                        disabled
-                        className="flex-1 rounded-xl border border-border/60 bg-input/40 py-2 px-3 text-xs outline-none opacity-80"
-                      />
-                      <button 
-                        onClick={() => showNotification("Register or Login to send actual messages in real-time!")}
-                        className="h-9 w-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-glow shrink-0 cursor-pointer hover:opacity-90"
+              {/* Social proof */}
+              <div className="flex items-center justify-center gap-3 mt-6 mx-auto">
+                <div className="flex -space-x-2">
+                  {["bg-primary/25", "bg-secondary/25", "bg-brand-pink/25", "bg-accent/25"].map(
+                    (bg, i) => (
+                      <div
+                        key={i}
+                        className={`h-7 w-7 rounded-full ${bg} border-2 border-background flex items-center justify-center text-[9px] font-bold text-foreground/60`}
                       >
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
+                        {["A", "K", "R", "S"][i]}
+                      </div>
+                    )
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">
+                    <AnimatedCounter target={totalWaitlist} suffix="+" />
+                  </strong>{" "}
+                  travel squads waiting
+                </p>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── MARQUEE TICKER ─── */}
+      <section className="w-full border-y border-border/30 py-4 overflow-hidden relative">
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-background to-transparent z-10" />
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10" />
+        <div className="flex animate-marquee whitespace-nowrap">
+          {[...marqueeItems, ...marqueeItems].map((item, i) => (
+            <span key={i} className="inline-flex items-center gap-3 mx-6 text-sm text-muted-foreground/70 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary/40" />
+              {item}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* ─── INTERACTIVE PRODUCT DEMO ─── */}
+      <section className="max-w-5xl mx-auto px-5 py-24">
+        <Reveal>
+          <div className="text-center mb-12">
+            <p className="text-[13px] font-semibold text-primary uppercase tracking-widest mb-3">
+              Interactive Preview
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+              See it in action
+            </h2>
+            <p className="text-muted-foreground mt-3 text-base max-w-lg mx-auto">
+              This isn't a mockup. Click around, type messages, toggle tasks — everything here is live.
+            </p>
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.15}>
+          <div className="rounded-2xl border border-border/40 bg-card/30 backdrop-blur-sm shadow-premium overflow-hidden">
+            {/* Browser Chrome */}
+            <div className="bg-muted/25 border-b border-border/20 px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1.5">
+                  <div className="h-3 w-3 rounded-full bg-rose-400/70" />
+                  <div className="h-3 w-3 rounded-full bg-amber-400/70" />
+                  <div className="h-3 w-3 rounded-full bg-emerald-400/70" />
+                </div>
+                <div className="hidden sm:flex items-center gap-2 ml-3 px-3 py-1 rounded-lg bg-background/50 border border-border/20">
+                  <Globe className="h-3 w-3 text-muted-foreground/50" />
+                  <span className="text-[11px] text-muted-foreground/60 font-mono">
+                    nxtvibes.app/boards/coorg-trip-2026
+                  </span>
+                </div>
+              </div>
+
+              {/* Tab Switcher */}
+              <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl">
+                {tabItems.map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                      activeTab === tab.key
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <tab.icon className={`h-3 w-3 ${activeTab === tab.key ? tab.color : ""}`} />
+                    <span className="hidden md:inline">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6 md:p-8 min-h-[400px] relative">
+              <AnimatePresence mode="wait">
+                {/* ── TIMELINE TAB ── */}
+                {activeTab === "timeline" && (
+                  <motion.div
+                    key="timeline"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                      <div>
+                        <h4 className="font-bold text-lg flex items-center gap-2">
+                          <Clock className="h-4.5 w-4.5 text-primary" />
+                          Day 1 — Bangalore → Coorg
+                        </h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Click tasks to mark them complete. Changes sync to all collaborators.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] bg-primary/10 text-primary px-3 py-1 rounded-full font-semibold">
+                          4 stops planned
+                        </span>
+                        <div className="flex -space-x-1.5">
+                          <div className="h-6 w-6 rounded-full bg-primary/20 border-2 border-background text-[8px] font-bold flex items-center justify-center">R</div>
+                          <div className="h-6 w-6 rounded-full bg-secondary/20 border-2 border-background text-[8px] font-bold flex items-center justify-center">K</div>
+                          <div className="h-6 w-6 rounded-full bg-brand-pink/20 border-2 border-background text-[8px] font-bold flex items-center justify-center">U</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      {/* Timeline Stops */}
+                      <div className="lg:col-span-5 relative border-l-2 border-primary/20 ml-3 pl-6 space-y-5">
+                        {[
+                          { num: 1, time: "06:00 AM", title: "Bangalore Airport", desc: "Pick up rental car, load luggage", color: "primary" },
+                          { num: 2, time: "11:30 AM", title: "Golden Temple, Bylakuppe", desc: "Tibetan monastery & cultural walk", color: "secondary" },
+                          { num: 3, time: "03:30 PM", title: "Abbey Falls Nature Stop", desc: "1.5km trek + waterfall viewpoint", color: "brand-pink" },
+                        ].map((stop) => (
+                          <div key={stop.num} className="relative group">
+                            <span className={`absolute -left-[27px] top-1 h-4 w-4 rounded-full bg-background border-[2.5px] border-${stop.color} transition-transform group-hover:scale-110`} />
+                            <div>
+                              <span className={`text-[10px] bg-${stop.color}/10 text-${stop.color} px-2 py-0.5 rounded-full font-semibold`}>
+                                {stop.time}
+                              </span>
+                              <h5 className="font-bold text-sm mt-1.5">{stop.title}</h5>
+                              <p className="text-xs text-muted-foreground mt-0.5">{stop.desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Checklist */}
+                      <div className="lg:col-span-7 bg-muted/15 border border-border/20 rounded-2xl p-5 space-y-3">
+                        <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                          Shared Checklist
+                        </h5>
+                        <div className="space-y-2">
+                          {tasks.map((task) => (
+                            <div
+                              key={task.id}
+                              onClick={() => toggleTask(task.id)}
+                              className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                                task.done
+                                  ? "border-success/20 bg-success/[0.03]"
+                                  : "border-border/20 bg-background/50 hover:bg-background/80"
+                              }`}
+                            >
+                              <div
+                                className={`h-4.5 w-4.5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                  task.done
+                                    ? "bg-success border-success text-white"
+                                    : "border-border/50"
+                                }`}
+                              >
+                                {task.done && <Check className="h-3 w-3" />}
+                              </div>
+                              <span
+                                className={`text-sm ${
+                                  task.done ? "line-through text-muted-foreground" : "text-foreground"
+                                }`}
+                              >
+                                {task.text}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── MAP TAB ── */}
+                {activeTab === "map" && (
+                  <motion.div
+                    key="map"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-5"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-lg flex items-center gap-2">
+                          <MapPin className="h-4.5 w-4.5 text-secondary" />
+                          Route Overview
+                        </h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Click a stop to focus the map. Every timeline stop auto-pins here.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                      <div className="lg:col-span-4 space-y-2">
+                        {[
+                          { key: "A" as const, title: "Bangalore Airport", sub: "Starting point", color: "primary", dist: "0 km" },
+                          { key: "B" as const, title: "Golden Temple", sub: "Bylakuppe, 218km", color: "secondary", dist: "218 km" },
+                          { key: "C" as const, title: "Abbey Falls", sub: "Nature trail, 268km", color: "brand-pink", dist: "268 km" },
+                        ].map((stop) => (
+                          <button
+                            key={stop.key}
+                            onClick={() => setActiveStop(stop.key)}
+                            className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
+                              activeStop === stop.key
+                                ? `border-${stop.color}/40 bg-${stop.color}/5`
+                                : "border-border/20 bg-card/30 hover:bg-card/60"
+                            }`}
+                          >
+                            <div className={`h-7 w-7 rounded-full bg-${stop.color}/15 text-${stop.color} text-[10px] font-bold flex items-center justify-center shrink-0`}>
+                              {stop.key}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-xs">{stop.title}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{stop.sub}</p>
+                            </div>
+                            {activeStop === stop.key && (
+                              <span className={`text-[9px] bg-${stop.color}/10 text-${stop.color} px-2 py-0.5 rounded-full font-semibold`}>
+                                {stop.dist}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Map Visual */}
+                      <div className="lg:col-span-8 rounded-2xl border border-border/20 bg-card/15 relative overflow-hidden min-h-[320px]">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          className="absolute inset-0 border-0 w-full h-full opacity-85 dark:opacity-75"
+                          style={{ filter: isDarkMode ? "invert(90%) hue-rotate(180deg)" : "none" }}
+                          loading="lazy"
+                          allowFullScreen
+                          referrerPolicy="no-referrer-when-downgrade"
+                          src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                            activeStop === "A"
+                              ? "Kempegowda International Airport Bengaluru"
+                              : activeStop === "B"
+                              ? "Namdroling Monastery Golden Temple Bylakuppe"
+                              : "Abbey Falls Coorg"
+                          )}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                        />
+
+                        {/* HUD */}
+                        <div className="absolute bottom-3 left-3 right-3 glass-panel rounded-xl p-3 flex items-center justify-between z-10 shadow-lg">
+                          <div>
+                            <p className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">Active Stop</p>
+                            <p className="font-semibold text-xs mt-0.5">
+                              {activeStop === "A" && "Bangalore Airport"}
+                              {activeStop === "B" && "Golden Temple, Bylakuppe"}
+                              {activeStop === "C" && "Abbey Falls Nature Trek"}
+                            </p>
+                          </div>
+                          <span className="text-[10px] bg-secondary/10 text-secondary px-2.5 py-1 rounded-lg font-semibold">
+                            {activeStop === "A" && "Start"}
+                            {activeStop === "B" && "218 km"}
+                            {activeStop === "C" && "268 km"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── CHAT TAB ── */}
+                {activeTab === "chat" && (
+                  <motion.div
+                    key="chat"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-4"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-lg flex items-center gap-2">
+                          <MessageSquare className="h-4.5 w-4.5 text-brand-pink" />
+                          Group Chat
+                        </h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Discuss with your friends in real-time to decide where and when to go.
+                        </p>
+                      </div>
+                      <span className="text-[11px] bg-success/10 text-success px-3 py-1 rounded-full font-semibold flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                        3 online
+                      </span>
+                    </div>
+
+                    <div className="border border-border/20 rounded-2xl bg-card/20 p-5 flex flex-col min-h-[300px]">
+                      <div className="space-y-3 overflow-y-auto max-h-[220px] pr-2 flex-1">
+                        {messages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`flex gap-2.5 items-start ${msg.isSelf ? "justify-end" : "justify-start"}`}
+                          >
+                            {!msg.isSelf && (
+                              <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center font-semibold text-[10px] shrink-0 text-primary">
+                                {msg.initial}
+                              </div>
+                            )}
+                            <div
+                              className={`px-3.5 py-2.5 rounded-2xl max-w-[70%] ${
+                                msg.isSelf
+                                  ? "bg-foreground text-background rounded-br-md"
+                                  : "bg-muted/30 border border-border/15 rounded-bl-md"
+                              }`}
+                            >
+                              {!msg.isSelf && (
+                                <p className="font-semibold text-[10px] text-muted-foreground mb-0.5">{msg.sender}</p>
+                              )}
+                              <p className="text-[13px] leading-relaxed">{msg.text}</p>
+                            </div>
+                            {msg.isSelf && (
+                              <div className="h-7 w-7 rounded-full bg-foreground/10 flex items-center justify-center font-semibold text-[10px] shrink-0">
+                                {msg.initial}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <form onSubmit={handleSendMsg} className="flex items-center gap-2 mt-4 pt-3 border-t border-border/15">
+                        <input
+                          type="text"
+                          placeholder="Type a message..."
+                          value={inputMsg}
+                          onChange={(e) => setInputMsg(e.target.value)}
+                          className="flex-1 rounded-xl border border-border/30 bg-background/50 py-2.5 px-4 text-sm outline-none focus:border-primary/40 transition-colors"
+                        />
+                        <button
+                          type="submit"
+                          className="h-10 w-10 rounded-xl bg-foreground text-background flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                        >
+                          <Send className="h-4 w-4" />
+                        </button>
+                      </form>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── FACE SCAN TAB ── */}
+                {activeTab === "scan" && (
+                  <motion.div
+                    key="scan"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-5"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-lg flex items-center gap-2">
+                          <Camera className="h-4.5 w-4.5 text-brand-cyan" />
+                          AI Photo Matcher
+                        </h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Scan your face to find your photos from the group dump instantly.
+                        </p>
+                      </div>
+                      <span className="text-[11px] bg-brand-cyan/10 text-brand-cyan px-3 py-1 rounded-full font-semibold">
+                        Phase 3 Preview
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                      <div className="lg:col-span-5 bg-muted/15 border border-border/20 rounded-2xl p-5 flex flex-col justify-between min-h-[300px]">
+                        <div>
+                          <span className="text-[10px] bg-brand-cyan/10 text-brand-cyan px-2 py-0.5 rounded-md font-mono uppercase font-semibold">
+                            {faceStep === "upload_dump" && "Step 1 of 3"}
+                            {faceStep === "upload_face" && "Step 2 of 3"}
+                            {faceStep === "ready_to_scan" && "Step 3 of 3"}
+                            {faceStep === "scanning" && "Running AI"}
+                            {faceStep === "completed" && "Finished"}
+                          </span>
+                          <h5 className="font-bold text-base mt-2.5 mb-2">
+                            {faceStep === "upload_dump" && "Upload Trip Photos"}
+                            {faceStep === "upload_face" && "Upload Face Photo"}
+                            {faceStep === "ready_to_scan" && "Ready to Scan"}
+                            {faceStep === "scanning" && "Matching Faces..."}
+                            {faceStep === "completed" && "Matches Found!"}
+                          </h5>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {faceStep === "upload_dump" && "First, upload the shared photo dump containing all the photos clicked by everyone during the trip."}
+                            {faceStep === "upload_face" && "Upload a clear photo of your face or take a quick selfie. The AI will search the trip dump for matches."}
+                            {faceStep === "ready_to_scan" && "Ready! NxtVibes AI will search the trip photos, match your face, and separate your photos instantly."}
+                            {faceStep === "scanning" && "Generating facial recognition signature and scanning matching images from the trip dump..."}
+                            {faceStep === "completed" && "AI found 3 photos featuring your face! Download link generated below for your curated album."}
+                          </p>
+                        </div>
+
+                        <div className="mt-5">
+                          {faceStep === "upload_dump" && (
+                            <button
+                              onClick={handleUploadDump}
+                              className="w-full flex items-center justify-center gap-2 bg-foreground text-background font-semibold py-3 rounded-xl text-xs cursor-pointer hover:opacity-90 transition-all active:scale-[0.98]"
+                            >
+                              <Layers className="h-4 w-4" />
+                              Upload Group Dump (15 Photos)
+                            </button>
+                          )}
+
+                          {faceStep === "upload_face" && (
+                            <button
+                              onClick={handleUploadFace}
+                              className="w-full flex items-center justify-center gap-2 bg-foreground text-background font-semibold py-3 rounded-xl text-xs cursor-pointer hover:opacity-90 transition-all active:scale-[0.98]"
+                            >
+                              <Smile className="h-4 w-4" />
+                              Upload Your Selfie
+                            </button>
+                          )}
+
+                          {faceStep === "ready_to_scan" && (
+                            <button
+                              onClick={startFaceScan}
+                              className="w-full flex items-center justify-center gap-2 bg-brand-cyan text-background font-semibold py-3 rounded-xl text-xs cursor-pointer hover:opacity-90 transition-all active:scale-[0.98] shadow-glow"
+                            >
+                              <Play className="h-4 w-4" />
+                              Start AI Face Search
+                            </button>
+                          )}
+
+                          {faceStep === "scanning" && (
+                            <div className="w-full bg-brand-cyan/10 border border-brand-cyan/20 text-brand-cyan rounded-xl py-3 text-center text-xs font-semibold animate-pulse">
+                              Searching through 15 photos...
+                            </div>
+                          )}
+
+                          {faceStep === "completed" && (
+                            <div className="space-y-2">
+                              <div className="p-3 rounded-xl bg-success/10 border border-success/25 text-success text-xs font-semibold flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 shrink-0" />
+                                Album ready: 3 matching photos!
+                              </div>
+                              <button
+                                onClick={resetFaceScan}
+                                className="w-full border border-border/40 bg-card/50 font-semibold py-2 rounded-xl text-xs hover:bg-muted/40 cursor-pointer transition-colors"
+                              >
+                                Reset & Scan Again
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-7 bg-card/15 border border-border/20 rounded-2xl p-4 relative overflow-hidden min-h-[250px] flex items-center justify-center">
+                        {faceStep === "scanning" && (
+                          <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-primary via-brand-pink to-brand-cyan animate-scanningLine z-30" />
+                        )}
+                        
+                        {faceStep === "upload_dump" ? (
+                          <div className="text-center p-6 space-y-3">
+                            <div className="h-12 w-12 rounded-full border border-dashed border-border flex items-center justify-center mx-auto text-muted-foreground/40">
+                              <Layers className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold">Group Dump Empty</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">Upload files on the left to populate the sandbox</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+                            {photos.map((photo) => {
+                              const isMatch = photo.hasUserFace && faceStep === "completed";
+                              const isMuted = !photo.hasUserFace && faceStep === "completed";
+                              return (
+                                <motion.div
+                                  key={photo.id}
+                                  animate={{
+                                    opacity: isMuted ? 0.35 : 1,
+                                    scale: isMatch ? 1.03 : isMuted ? 0.96 : 1,
+                                  }}
+                                  transition={{ duration: 0.4 }}
+                                  className={`aspect-[4/3] rounded-xl border p-3 flex flex-col justify-between bg-gradient-to-tr ${photo.color} relative ${
+                                    isMatch ? "ring-2 ring-brand-cyan border-brand-cyan/40" : "border-border/15"
+                                  }`}
+                                >
+                                  {isMatch && (
+                                    <div className="absolute top-1.5 right-1.5 bg-brand-cyan text-white p-0.5 rounded-full z-10">
+                                      <Check className="h-2.5 w-2.5" />
+                                    </div>
+                                  )}
+                                  <span className="text-[8px] bg-background/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md font-mono uppercase font-semibold text-muted-foreground self-start">
+                                    {photo.type}
+                                  </span>
+                                  <div>
+                                    <p className="text-[10px] font-semibold truncate">{photo.name}</p>
+                                    {isMatch && (
+                                      <span className="text-[8px] text-brand-cyan font-bold block mt-0.5 hover:underline cursor-pointer">
+                                        Download
+                                      </span>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* ─── FEATURES — Horizontal Scroll Carousel ─── */}
+      <section id="features" className="py-24 border-t border-border/10 overflow-hidden relative">
+        <div className="max-w-6xl mx-auto px-5 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <Reveal className="max-w-lg">
+            <p className="text-[13px] font-semibold text-primary uppercase tracking-widest mb-3">
+              Product Capabilities
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+              Curated for the perfect trip
+            </h2>
+            <p className="text-muted-foreground mt-3 text-base">
+              Swipe or use navigation controls to explore the core pillars of NxtVibes.
+            </p>
+          </Reveal>
+
+          {/* Navigation Controls */}
+          <Reveal className="flex items-center gap-3 self-start md:self-auto" delay={0.1}>
+            <button
+              onClick={handleScrollLeft}
+              className="h-11 w-11 rounded-full border border-border/40 bg-card/45 hover:bg-muted/80 text-foreground flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              onClick={handleScrollRight}
+              className="h-11 w-11 rounded-full border border-border/40 bg-card/45 hover:bg-muted/80 text-foreground flex items-center justify-center cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-sm"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </Reveal>
+        </div>
+
+        {/* Horizontal scrollable row */}
+        <div className="relative w-full">
+          {/* Edge fade overlays */}
+          <div className="absolute left-0 top-0 bottom-0 w-8 md:w-20 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-8 md:w-20 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+          <div
+            ref={scrollContainerRef}
+            className="flex gap-6 overflow-x-auto scrollbar-hide py-4 px-8 md:px-24 snap-x snap-mandatory scroll-smooth"
+          >
+            {[
+              {
+                title: "Real-time collaboration",
+                desc: "Invite your squad and plan together. Everyone sees updates instantly with zero lag or desync.",
+                icon: Users,
+                phase: "Phase 1",
+                bgClass: "bg-primary/10",
+                textClass: "text-primary"
+              },
+              {
+                title: "Day-wise itineraries",
+                desc: "Organize stops into elegant, drag-and-drop daily schedules. Set clear timestamps and notes.",
+                icon: Compass,
+                phase: "Phase 1",
+                bgClass: "bg-secondary/10",
+                textClass: "text-secondary"
+              },
+              {
+                title: "Google Maps integration",
+                desc: "Every itinerary stop auto-pins on a shared map view. View optimal routes and travel distances.",
+                icon: MapPin,
+                phase: "Phase 1",
+                bgClass: "bg-brand-pink/10",
+                textClass: "text-brand-pink"
+              },
+              {
+                title: "Shared checklists",
+                desc: "Collaborative checklists per stop. Stay aligned on flight check-ins, tickets, and packing lists.",
+                icon: CheckSquare,
+                phase: "Phase 1",
+                bgClass: "bg-accent/10",
+                textClass: "text-accent"
+              },
+              {
+                title: "Group & direct chats",
+                desc: "Native chat threads built directly alongside the planning boards. Ditch the WhatsApp chaos.",
+                icon: MessageSquare,
+                phase: "Phase 1",
+                bgClass: "bg-success/10",
+                textClass: "text-success"
+              },
+              {
+                title: "AI trip planning",
+                desc: "Generate full, personalized travel plans and weather-optimized schedules with a single prompt.",
+                icon: Sparkles,
+                phase: "Phase 2",
+                bgClass: "bg-secondary/10",
+                textClass: "text-secondary"
+              },
+              {
+                title: "Face-scan photo matching",
+                desc: "Upload all trip photos, upload a selfie, and let AI automatically separate and sort everyone's photos.",
+                icon: Camera,
+                phase: "Phase 3",
+                bgClass: "bg-brand-cyan/10",
+                textClass: "text-brand-cyan"
+              }
+            ].map((feat) => (
+              <div
+                key={feat.title}
+                className="w-[280px] md:w-[320px] shrink-0 snap-center rounded-2xl border border-border/30 bg-card/45 backdrop-blur-md p-7 hover:border-primary/25 hover:translate-y-[-4px] transition-all group relative overflow-hidden flex flex-col justify-between min-h-[260px]"
+              >
+                <div className="absolute -right-16 -bottom-16 w-36 h-36 bg-foreground/[0.01] rounded-full blur-2xl group-hover:bg-foreground/[0.03] transition-colors pointer-events-none" />
+                <div>
+                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center mb-6 ${feat.bgClass} ${feat.textClass}`}>
+                    <feat.icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base mb-2 text-foreground group-hover:text-primary transition-colors">{feat.title}</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {feat.desc}
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-border/10 flex items-center justify-between">
+                  <span className="text-[9px] font-mono text-muted-foreground/60 uppercase tracking-wider">Features</span>
+                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${feat.bgClass} ${feat.textClass}`}>
+                    {feat.phase}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── ROADMAP ─── */}
+      <section id="roadmap" className="max-w-4xl mx-auto px-5 py-24">
+        <Reveal>
+          <div className="max-w-lg mb-16">
+            <p className="text-[13px] font-semibold text-primary uppercase tracking-widest mb-3">
+              Product Roadmap
+            </p>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+              Where we're headed
+            </h2>
+            <p className="text-muted-foreground mt-3 text-base">
+              A phased rollout — shipping what matters first, then leveling up.
+            </p>
+          </div>
+        </Reveal>
+
+        <div className="space-y-6">
+          {[
+            {
+              phase: "Phase 1",
+              title: "Foundation",
+              status: "Live Soon",
+              statusColor: "text-success bg-success/10",
+              dotColor: "bg-success",
+              borderColor: "border-success/30 hover:border-success/50",
+              icon: Compass,
+              iconColor: "bg-primary/10 text-primary",
+              items: [
+                { label: "Direct & Group Chats", desc: "Real-time messaging alongside your trip board" },
+                { label: "Custom Day-Wise Itineraries", desc: "Build, edit, and reorder timeline stops collaboratively" },
+                { label: "Checklists & Notes", desc: "Add tasks and notes under each stop" },
+                { label: "Google Maps Integration", desc: "Auto-pin every stop on a shared map view" },
+                { label: "Collaborators & Sharing", desc: "Invite friends, share to WhatsApp & other apps" },
+              ],
+            },
+            {
+              phase: "Phase 2",
+              title: "AI Intelligence",
+              status: "In Pipeline",
+              statusColor: "text-secondary bg-secondary/10",
+              dotColor: "bg-secondary",
+              borderColor: "border-secondary/20 hover:border-secondary/40",
+              icon: Sparkles,
+              iconColor: "bg-secondary/10 text-secondary",
+              items: [
+                { label: "AI Itinerary Generation", desc: "Generate full day-by-day plans from a single prompt" },
+                { label: "AI Trip Recommendations", desc: "Weather-aware routing and budget-optimized suggestions" },
+              ],
+            },
+            {
+              phase: "Phase 3",
+              title: "Social & Expenses",
+              status: "Future",
+              statusColor: "text-brand-pink bg-brand-pink/10",
+              dotColor: "bg-brand-pink",
+              borderColor: "border-brand-pink/20 hover:border-brand-pink/40",
+              icon: Camera,
+              iconColor: "bg-brand-pink/10 text-brand-pink",
+              items: [
+                { label: "Split Bills", desc: "Transparent expense ledger to divide costs among the squad" },
+                { label: "Photo Dump Rooms", desc: "Upload and share high-res trip photos in one place" },
+                { label: "AI Face-Scan Photo Sort", desc: "Scan your face to isolate and download your photos" },
+              ],
+            },
+            {
+              phase: "Phase 4",
+              title: "Native Mobile",
+              status: "Horizon",
+              statusColor: "text-brand-cyan bg-brand-cyan/10",
+              dotColor: "bg-brand-cyan",
+              borderColor: "border-brand-cyan/20 hover:border-brand-cyan/40",
+              icon: Smartphone,
+              iconColor: "bg-brand-cyan/10 text-brand-cyan",
+              items: [
+                { label: "Android App Launch", desc: "Full-featured native app on Google Play Store" },
+                { label: "iOS App Launch", desc: "Followed by Apple App Store deployment" },
+              ],
+            },
+          ].map((phase, idx) => (
+            <Reveal key={phase.phase} delay={idx * 0.08}>
+              <div className={`rounded-2xl border ${phase.borderColor} bg-card/20 backdrop-blur-sm p-6 md:p-7 transition-all`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-9 w-9 rounded-xl ${phase.iconColor} flex items-center justify-center`}>
+                      <phase.icon className="h-4.5 w-4.5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base">
+                        <span className="text-muted-foreground font-medium">{phase.phase}:</span>{" "}
+                        {phase.title}
+                      </h3>
                     </div>
                   </div>
+                  <span className={`text-[11px] ${phase.statusColor} px-3 py-1 rounded-full font-semibold self-start flex items-center gap-1.5`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${phase.dotColor}`} />
+                    {phase.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
+                  {phase.items.map((item) => (
+                    <div key={item.label} className="flex items-start gap-2.5">
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">{item.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-
-            {/* AI Assistant Demo Screen */}
-            {activeDemo === "ai" && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex justify-between items-center border-b border-border/20 pb-4 mb-4">
-                  <div>
-                    <h4 className="font-extrabold text-lg">AI Travel Recommendation Engine</h4>
-                    <p className="text-xs text-muted-foreground">Instantly draft plans, check reviews, optimize travel expenses, and discover local spots.</p>
-                  </div>
-                  <span className="text-[10px] bg-accent/15 text-accent border border-accent/20 px-3 py-1 rounded-full font-bold uppercase tracking-wider">AI Copilot</span>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-                  {/* Prompt Selector list */}
-                  <div className="lg:col-span-4 space-y-2.5">
-                    <h5 className="font-bold text-xs text-muted-foreground uppercase tracking-wider">Try Prompts</h5>
-                    
-                    <button 
-                      onClick={() => {
-                        setAiPromptClicked(true);
-                        showNotification("AI is thinking...");
-                      }}
-                      className="w-full text-left p-3.5 rounded-2xl border border-border/40 bg-card/40 hover:bg-card transition-all text-xs font-semibold cursor-pointer shadow-sm hover:border-primary/30 flex items-center justify-between group"
-                    >
-                      <span>Suggest Coorg viewpoints during rain</span>
-                      <Sparkles className="h-3.5 w-3.5 text-primary opacity-60 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        showNotification("Mock Action: Optimized 3-day transit budget to ₹2,500!");
-                      }}
-                      className="w-full text-left p-3.5 rounded-2xl border border-border/40 bg-card/40 hover:bg-card transition-all text-xs font-semibold cursor-pointer shadow-sm hover:border-primary/30 flex items-center justify-between group"
-                    >
-                      <span>Optimize route & budget for 3 days</span>
-                      <Sparkles className="h-3.5 w-3.5 text-secondary opacity-60 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        showNotification("Mock Action: Loaded Coorg coffee estate stays!");
-                      }}
-                      className="w-full text-left p-3.5 rounded-2xl border border-border/40 bg-card/40 hover:bg-card transition-all text-xs font-semibold cursor-pointer shadow-sm hover:border-primary/30 flex items-center justify-between group"
-                    >
-                      <span>Recommend local coffee estate stays</span>
-                      <Sparkles className="h-3.5 w-3.5 text-accent opacity-60 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                    </button>
-                  </div>
-
-                  {/* AI Response Output Block */}
-                  <div className="lg:col-span-8 rounded-2xl border border-border/40 bg-card/50 p-5 min-h-[220px] flex flex-col justify-between shadow-sm">
-                    {aiPromptClicked ? (
-                      <div className="space-y-3.5 text-xs text-foreground/80 leading-relaxed">
-                        <div className="flex items-center gap-2 text-primary font-bold">
-                          <Sparkles className="h-4 w-4" />
-                          <span>Sarah (NxtVibes AI Assistant)</span>
-                        </div>
-                        <p>Here are the best rainy-season recommendations for your Coorg trip plan:</p>
-                        
-                        <div className="space-y-2.5 pl-2 border-l border-primary/20">
-                          <div>
-                            <p className="font-bold text-foreground">1. Raja's Seat (Sunset & Fog)</p>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">High valley sunset viewport. Monsoon rain wraps the mountains in epic mist beds.</p>
-                          </div>
-                          <div>
-                            <p className="font-bold text-foreground">2. Mandalpatti (4x4 Jeep Trail)</p>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">Off-road jeep track. Highly recommended when it drizzles; feels like standing in clouds.</p>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 flex gap-2 justify-end">
-                          <button 
-                            onClick={() => {
-                              setAiPromptClicked(false);
-                              showNotification("Added 2 viewpoints to your itinerary Day 1!");
-                            }}
-                            className="bg-primary text-primary-foreground text-[10px] font-bold px-3.5 py-2 rounded-xl shadow-glow cursor-pointer hover:opacity-90"
-                          >
-                            Sync to Board Itinerary
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-75">
-                        <div className="h-10 w-10 rounded-full bg-muted/80 flex items-center justify-center text-muted-foreground mb-3">
-                          <Sparkles className="h-5 w-5" />
-                        </div>
-                        <p className="text-xs font-bold">No Prompt Loaded</p>
-                        <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">Click one of the suggested prompts on the left to see the AI Travel Copilot output in action.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+            </Reveal>
+          ))}
         </div>
       </section>
 
-      {/* Call to action section */}
-      <section className="max-w-4xl mx-auto px-4 py-12 relative z-10">
-        <div className="rounded-3xl border border-border/40 bg-card/45 backdrop-blur-lg p-8 md:p-12 shadow-premium text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-brand-pink/10 -z-10" />
-          
-          <h2 className="text-2xl md:text-3xl font-black">Ready to Start Your Journey?</h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto mt-3">
-            Bring your friends, plan your visual itinerary, and explore new travel vibes today.
-          </p>
+      {/* ─── FINAL CTA + CONTACT ─── */}
+      <section id="contact" className="max-w-4xl mx-auto px-5 py-24">
+        <Reveal>
+          <div className="rounded-3xl border border-border/30 bg-card/20 backdrop-blur-sm p-10 md:p-16 text-center relative overflow-hidden">
+            {/* Ambient */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] via-transparent to-brand-pink/[0.03] pointer-events-none" />
 
-          <div className="mt-8 flex justify-center">
-            {isLoggedIn ? (
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 rounded-2xl btn-premium px-8 py-3.5 text-sm font-bold text-primary-foreground shadow-premium"
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight relative">
+              Ready to ditch the chaos?
+            </h2>
+            <p className="text-muted-foreground mt-4 text-base max-w-md mx-auto relative">
+              Join the waitlist for early access. Or just say hi — we read every email.
+            </p>
+
+            {/* Waitlist Duplicate */}
+            <div className="mt-8 max-w-md mx-auto relative">
+              {waitlistStatus === "success" ? (
+                <div className="p-4 rounded-2xl border border-success/30 bg-success/5 text-success text-sm font-semibold flex items-center justify-center gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  You're on the waitlist!
+                </div>
+              ) : (
+                <form
+                  onSubmit={handleJoinWaitlist}
+                  className="flex flex-col sm:flex-row gap-3"
+                >
+                  <input
+                    type="email"
+                    placeholder="your@email.com"
+                    required
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    disabled={waitlistStatus === "loading"}
+                    className="flex-1 px-5 py-3.5 rounded-xl border border-border/40 bg-background/50 text-foreground placeholder:text-muted-foreground/60 outline-none text-[15px] focus:border-primary/50 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={waitlistStatus === "loading"}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-foreground text-background px-6 py-3.5 text-[15px] font-semibold cursor-pointer disabled:opacity-50 shrink-0 hover:opacity-90 transition-all"
+                  >
+                    {waitlistStatus === "loading" ? "Joining..." : "Join Waitlist"}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Contact Email */}
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 relative">
+              <div className="flex items-center gap-3 border border-border/40 bg-background/40 rounded-xl px-4 py-2.5">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-foreground select-all">nxtvibes.app@gmail.com</span>
+                <button
+                  onClick={copyEmailToClipboard}
+                  className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title="Copy"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <a
+                href="mailto:nxtvibes.app@gmail.com"
+                className="flex items-center gap-2 rounded-xl bg-primary/10 text-primary px-5 py-2.5 text-sm font-semibold hover:bg-primary/15 transition-colors"
               >
-                Go to Dashboard
-                <ArrowRight className="h-4.5 w-4.5" />
-              </Link>
-            ) : (
-              <Link
-                href="/register"
-                className="flex items-center gap-2 rounded-2xl btn-premium px-8 py-3.5 text-sm font-bold text-primary-foreground shadow-premium"
-              >
-                Create Free Account
-                <ArrowRight className="h-4.5 w-4.5" />
-              </Link>
-            )}
+                <Send className="h-3.5 w-3.5" />
+                Send Email
+              </a>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
-      {/* Premium modern footer */}
-      <footer className="w-full border-t border-border/20 bg-background/80 backdrop-blur-md mt-20">
-        <div className="max-w-6xl mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Col 1 */}
-          <div className="space-y-4">
+      {/* ─── FOOTER ─── */}
+      <footer className="w-full border-t border-border/20 bg-background/80 backdrop-blur-md mt-10">
+        <div className="max-w-6xl mx-auto px-5 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-base shadow-glow">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-brand-pink text-white font-bold text-xs">
                 NV
               </div>
-              <span className="font-extrabold text-base tracking-tight">NxtVibes</span>
+              <span className="font-bold text-base tracking-tight">NxtVibes</span>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Real-time collaboration travel planning web app. Synchronizing plans, schedules, and conversations dynamically.
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Collaborative trip planning for squads who actually travel together.
             </p>
           </div>
 
-          {/* Col 2 */}
           <div className="space-y-3">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-foreground/80">Features</h5>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li><Link href="/dashboard" className="hover:text-primary transition-colors">Trip Dashboard</Link></li>
-              <li><Link href="/itineraries/new" className="hover:text-primary transition-colors">Visual Stepper Wizard</Link></li>
-              <li><Link href="/messages" className="hover:text-primary transition-colors">Real-time chat & media</Link></li>
+            <h5 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Roadmap</h5>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 1: Foundation</a></li>
+              <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 2: AI Planner</a></li>
+              <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 3: Social</a></li>
+              <li><a href="#roadmap" className="hover:text-foreground transition-colors">Phase 4: Mobile</a></li>
             </ul>
           </div>
 
-          {/* Col 3 */}
           <div className="space-y-3">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-foreground/80">Integration</h5>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li><span className="opacity-80">Supabase DB</span></li>
-              <li><span className="opacity-80">Cloudflare Workers</span></li>
-              <li><span className="opacity-80">TanStack Query Cache</span></li>
+            <h5 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Support</h5>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><a href="mailto:nxtvibes.app@gmail.com" className="hover:text-foreground transition-colors">Contact Email</a></li>
+              <li><a href="#waitlist" className="hover:text-foreground transition-colors">Join Waitlist</a></li>
             </ul>
           </div>
 
-          {/* Col 4 */}
           <div className="space-y-3">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-foreground/80">Privacy & Terms</h5>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li><Link href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/terms" className="hover:text-primary transition-colors">Terms of Use</Link></li>
+            <h5 className="text-xs font-semibold uppercase tracking-wider text-foreground/70">Legal</h5>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="hover:text-foreground transition-colors">Terms of Use</Link></li>
             </ul>
           </div>
         </div>
 
-        {/* Bottom copyright row */}
-        <div className="max-w-6xl mx-auto px-4 py-6 border-t border-border/10 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
+        <div className="max-w-6xl mx-auto px-5 py-5 border-t border-border/10 flex flex-col md:flex-row justify-between items-center gap-3 text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} NxtVibes. All rights reserved.</p>
-          <div className="flex gap-4">
-            <span className="hover:text-foreground cursor-pointer">Twitter</span>
-            <span className="hover:text-foreground cursor-pointer">Instagram</span>
-            <span className="hover:text-foreground cursor-pointer">GitHub</span>
+          <div className="flex gap-5">
+            <span className="hover:text-foreground cursor-pointer transition-colors">Twitter</span>
+            <span className="hover:text-foreground cursor-pointer transition-colors">Instagram</span>
           </div>
         </div>
       </footer>
