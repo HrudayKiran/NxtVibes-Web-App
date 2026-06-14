@@ -91,6 +91,17 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <head>
+        <title>NxtVibes — Group Travel Planner & Itinerary Builder</title>
+        <meta name="google-site-verification" content="wJtck-og082aWD4gT4bN8xBxwQovZwbKlpzPme3RoWg" />
+        <meta name="description" content="Ditch the WhatsApp planning chaos. Build day-wise itineraries, auto-pin stops on shared Google Maps, chat in real-time, and sort photos instantly with AI face-scanning." />
+        <meta name="keywords" content="travel planner, group travel, itinerary builder, shared map, trip collaboration, face scanner photo sort, split bills" />
+        <meta property="og:title" content="NxtVibes — Group Travel Planner & Itinerary Builder" />
+        <meta property="og:description" content="Collaborative trip planning for squads who actually travel together. Get day-wise itineraries, shared checklists, and group chats in one place." />
+        <meta property="og:url" content="https://nxtvibes.vercel.app/" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="NxtVibes — Group Travel Planner" />
+        <meta name="twitter:description" content="Collaborative trip planning for squads who actually travel together. Get day-wise itineraries, shared checklists, and group chats in one place." />
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-EDEFDL3XEN"
           strategy="afterInteractive"
