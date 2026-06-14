@@ -51,6 +51,8 @@ function AppInit({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const isPublicPage = pathname === "/" || pathname === "/privacy" || pathname === "/terms";
+
   useEffect(() => {
     initTheme();
     setMounted(true);
@@ -73,7 +75,7 @@ function AppInit({ children }: { children: React.ReactNode }) {
     }
   }, [initTheme, pathname, router]);
 
-  if (!mounted) {
+  if (!mounted && !isPublicPage) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground font-sans">
         <div className="flex flex-col items-center gap-4">
