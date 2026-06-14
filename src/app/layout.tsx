@@ -116,7 +116,7 @@ export default function RootLayout({
     <html lang="en" className={cn("h-full", outfit.variable, inter.variable, spaceGrotesk.variable)}>
       <head>
         <title>NxtVibes — Group Travel Planner & Itinerary Builder</title>
-        <link rel="preconnect" href="https://pcbeldwtogqhffpssjlt.supabase.co" />
+        <link rel="preconnect" href="https://pcbeldwtogqhffpssjlt.supabase.co" crossOrigin="anonymous" />
         <meta name="google-site-verification" content="wJtck-og082aWD4gT4bN8xBxwQovZwbKlpzPme3RoWg" />
         <meta name="description" content="Ditch the WhatsApp planning chaos. Build day-wise itineraries, auto-pin stops on shared Google Maps, chat in real-time, and sort photos instantly with AI face-scanning." />
         <meta name="keywords" content="travel planner, group travel, itinerary builder, shared map, trip collaboration, face scanner photo sort, split bills" />
